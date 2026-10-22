@@ -9,9 +9,9 @@ file-handling APIs: broken object-level authorization (BOLA/IDOR), path
 traversal, content-type spoofing, credential brute force, and information
 leakage through errors.
 
-**Status:** MVP feature-complete. 85 tests pass (`mvn verify`, real
-PostgreSQL via Testcontainers), and every flow has been smoke-tested by
-hand over real HTTP. See [`PROJECT_STATUS.md`](PROJECT_STATUS.md) for
+**Status:** MVP complete. 91 tests pass (`mvn verify`, real PostgreSQL
+via Testcontainers) locally and in GitHub Actions. The flows were
+smoke-tested by hand over real HTTP. See [`PROJECT_STATUS.md`](PROJECT_STATUS.md) for
 verified results and [`PROJECT_SPEC.md`](PROJECT_SPEC.md) for the agreed
 design.
 
@@ -55,6 +55,7 @@ Flyway creates the schema on first start (`V1__init.sql`, `V2__audit_log.sql`).
 | `DB_USERNAME` / `DB_PASSWORD` | `securevault` / `changeme` | PostgreSQL credentials (change outside local dev) |
 | `AUTH_RATE_LIMIT_PER_MINUTE` | `10` | Login + register requests per client (IPv4 address or IPv6 /64) |
 | `STORAGE_ROOT` | `./data/storage` | Where uploaded files are written; keep it outside any web-served directory |
+| `STORAGE_QUOTA_PER_USER` | `1GB` | Total bytes of documents one user may store (`500MB`, `5GB`, ...) |
 | `SERVER_PORT` | `8080` | HTTP port |
 
 ### Running the tests
@@ -74,11 +75,11 @@ from `/api/auth/login`.
 | POST | `/api/auth/register` | public | 201 | `{email, password}`; password 12–72 chars (≤ 72 UTF-8 bytes) |
 | POST | `/api/auth/login` | public | 200 | → `{accessToken, tokenType: "Bearer", expiresIn}` |
 | GET | `/api/users/me` | bearer | 200 | Current user (never includes the password hash) |
-| POST | `/api/documents` | bearer | 201 | `multipart/form-data`, field `file`; PDF/PNG/JPEG only, ≤ 25 MB |
+| POST | `/api/documents` | bearer | 201 | `multipart/form-data`, field `file`; PDF/PNG/JPEG only, ≤ 25 MB, within your storage quota |
 | GET | `/api/documents` | bearer | 200 | Your documents, newest first |
 | GET | `/api/documents/{id}` | bearer | 200 | Metadata |
 | GET | `/api/documents/{id}/download` | bearer | 200 | Always an attachment |
-| DELETE | `/api/documents/{id}` | bearer | 204 | Removes the row and the stored file |
+| DELETE | `/api/documents/{id}` | bearer | 204 | Removes the row and the stored file, freeing its quota |
 | GET | `/actuator/health` | public | 200 | The only actuator endpoint exposed |
 
 Every error returns the same shape, with no stack traces or internal
@@ -88,11 +89,21 @@ details:
 {"timestamp":"…","status":404,"error":"Not Found","message":"Document not found","path":"/api/documents/…"}
 ```
 
-Error statuses: 400 for bad input or a malformed id, 401 for an
-unauthenticated request or bad credentials, 404 for a missing *or
-someone else's* document, 409 for a duplicate email, 413 for files over
-25 MB, 415 for disallowed file types, and 429 when rate-limited (with
-`Retry-After`).
+| Status | When |
+|---|---|
+| 400 | Invalid input, malformed id, empty file, malformed multipart |
+| 401 | Missing/invalid token, or wrong email/password on login |
+| 404 | Document doesn't exist **or belongs to someone else** (deliberately indistinguishable) |
+| 409 | Email already registered, **or** the upload would push you over your storage quota |
+| 413 | A single file is over 25 MB |
+| 415 | File content isn't PDF, PNG, or JPEG |
+| 429 | Too many login/register requests from your address (`Retry-After` header) |
+
+**413 vs. 409 on upload:** 413 means *this file* is too large (over the
+25 MB per-file limit), whatever you have stored. 409 means the file is
+acceptable on its own, but your stored documents plus this one would
+exceed `STORAGE_QUOTA_PER_USER`. The message says how much you've used.
+Deleting documents frees quota.
 
 Example:
 
@@ -183,7 +194,7 @@ filenames, content types, ids, `X-Forwarded-For`) is trusted.
 | Header injection via filename | Control characters stripped; RFC 5987 `Content-Disposition` | `DocumentIntegrationTest` |
 | Information leakage in errors | Fixed client messages; details logged server-side only; only `health` exposed on actuator | `serverErrorsDoNotLeakInternals`, `onlyHealthActuatorEndpointIsExposed` |
 | Repudiation | `audit_log` written with `REQUIRES_NEW` | `AuditLogIntegrationTest` (fails if propagation is `REQUIRED`) |
-| Resource exhaustion from huge uploads / rate-limiter memory | 25 MB limit (servlet + service); bucket cache bounded and expiring | Tests plus a manual 25 MB / 25 MB + 1 check |
+| Resource exhaustion (huge uploads, filling the disk, rate-limiter memory) | 25 MB per file (servlet + service); per-user quota enforced under a row lock so concurrent uploads can't overshoot; bucket cache bounded and expiring | `StorageQuotaIntegrationTest` (fails without the lock), plus a manual 25 MB / 25 MB + 1 check |
 | Vulnerable dependencies | Dependabot; Dependency Review blocks high/critical on PRs | CI config |
 
 ## Known tradeoffs
@@ -213,8 +224,13 @@ filenames, content types, ids, `X-Forwarded-For`) is trusted.
   stored, the file is deleted. If deleting a file fails after its row was
   removed, the file stays on disk and a warning is logged. There is no
   cleanup job.
-- **No upload quota.** An authenticated user can upload any number of
-  files of up to 25 MB each. Only the auth endpoints are rate-limited.
+- **The storage quota is per user, not global.** It caps each account,
+  but many accounts can still fill the disk together, and registration
+  is only rate-limited per client address. Usage is counted from
+  document metadata. Orphaned files (see above) are not counted. The
+  same quota applies to every user; there are no per-account overrides.
+- **Uploads aren't rate-limited.** Only login and register are. Uploads
+  are bounded by the 25 MB per-file limit and the quota.
 - **No token revocation.** Tokens stay valid until they expire (default
   60 minutes). There is no logout or refresh token. Rotating `JWT_SECRET`
   invalidates every token.
