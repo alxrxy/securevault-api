@@ -5,6 +5,7 @@ import dev.alexreyes.securevault.auth.dto.LoginRequest;
 import dev.alexreyes.securevault.auth.dto.RegisterRequest;
 import dev.alexreyes.securevault.auth.service.AuthService;
 import dev.alexreyes.securevault.user.dto.UserResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -25,12 +26,13 @@ public class AuthController {
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
-    public UserResponse register(@Valid @RequestBody RegisterRequest request) {
-        return authService.register(request);
+    public UserResponse register(@Valid @RequestBody RegisterRequest request, HttpServletRequest httpRequest) {
+        // getRemoteAddr(), never X-Forwarded-For - see AuthRateLimitFilter.
+        return authService.register(request, httpRequest.getRemoteAddr());
     }
 
     @PostMapping("/login")
-    public AuthResponse login(@Valid @RequestBody LoginRequest request) {
-        return authService.login(request);
+    public AuthResponse login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
+        return authService.login(request, httpRequest.getRemoteAddr());
     }
 }
