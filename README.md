@@ -385,7 +385,7 @@ a 1 KB quota.
 | [`ci.yml`](.github/workflows/ci.yml) | push and PR to `main` | `mvn -B -ntp verify` on JDK 21 Temurin with a Maven cache: compile, all tests (Testcontainers uses the runner's Docker), package |
 | [`codeql.yml`](.github/workflows/codeql.yml) | push and PR to `main`, weekly | CodeQL static analysis of the Java code (default high-precision security query suite, deliberately not `security-extended`, to avoid false-positive noise); results appear under **Security → Code scanning** |
 | [`dependency-review.yml`](.github/workflows/dependency-review.yml) | PRs to `main` | Fails the PR if it adds a dependency with a known **high or critical** vulnerability |
-| [`dependabot.yml`](.github/dependabot.yml) | weekly | Update PRs for Maven (minor/patch grouped into one PR), GitHub Actions, and the Dockerfile base images |
+| [`dependabot.yml`](.github/dependabot.yml) | weekly | Update PRs for Maven (minor/patch grouped into one PR), GitHub Actions (all `github/codeql-action/*` steps in one grouped PR), and the runtime image `eclipse-temurin`, held on Java 21 (versions `>= 22` ignored). The `maven` build image is excluded entirely and bumped by hand |
 | Secret scanning + push protection | every push | Enabled in the repository settings; pushes containing recognized credentials are blocked |
 
 Supply-chain hardening:
@@ -415,6 +415,9 @@ Supply-chain hardening:
 - **The Docker image build skips tests.** Tests need a Docker daemon
   (Testcontainers), so they run in CI (`mvn verify`), not inside
   `docker build`.
+- **The Maven build image is bumped by hand.** Its tag carries the JDK
+  version only in a suffix Dependabot can't filter, so it is excluded from
+  Dependabot to keep builds on Java 21 and gets no automated updates.
 
 ## Known limitations
 
