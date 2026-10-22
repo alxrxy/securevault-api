@@ -17,8 +17,12 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
+import java.net.Inet6Address;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -30,7 +34,10 @@ import java.util.concurrent.TimeUnit;
  * <p>The client is identified by {@code request.getRemoteAddr()} only.
  * {@code X-Forwarded-For} is deliberately ignored: there is no trusted
  * reverse proxy in front of this app, so the header is client-controlled
- * and trusting it would make the limit trivially bypassable.
+ * and trusting it would make the limit trivially bypassable. IPv4 clients
+ * are keyed by their full address; IPv6 clients by their /64 prefix, since
+ * a single host or subscriber is normally assigned a whole /64 and could
+ * otherwise rotate through 2^64 addresses (see {@link #clientKey}).
  *
  * <p>Buckets live in a Caffeine cache that is bounded in size and evicts
  * an IP's bucket after one refill period without requests - by then the
@@ -48,6 +55,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
     private static final Set<String> RATE_LIMITED_PATHS = Set.of("/api/auth/login", "/api/auth/register");
     private static final Duration REFILL_PERIOD = Duration.ofMinutes(1);
     private static final long MAX_TRACKED_IPS = 100_000;
+    private static final int IPV6_PREFIX_BYTES = 8; // /64
 
     private final long requestsPerMinute;
     private final JsonMapper jsonMapper;
@@ -92,7 +100,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain) throws ServletException, IOException {
 
-        Bucket bucket = buckets.get(request.getRemoteAddr(), ip -> newBucket());
+        Bucket bucket = buckets.get(clientKey(request.getRemoteAddr()), key -> newBucket());
         ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
         if (probe.isConsumed()) {
             filterChain.doFilter(request, response);
@@ -107,6 +115,31 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         response.setHeader(HttpHeaders.RETRY_AFTER, String.valueOf(retryAfterSeconds));
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         jsonMapper.writeValue(response.getOutputStream(), body);
+    }
+
+    /**
+     * IPv4 → the address itself. IPv6 → its /64 network, e.g.
+     * {@code 2001:db8:1:2:aaaa::1} → {@code 2001:db8:1:2:0:0:0:0/64}, so all
+     * spellings and all hosts of one /64 share a bucket. IPv4-mapped IPv6
+     * ({@code ::ffff:10.0.0.1}) is treated as the IPv4 address.
+     */
+    static String clientKey(String remoteAddr) {
+        // Only parse IPv6 literals: a ':' can't appear in an IPv4 address or
+        // hostname, so getByName below never triggers a DNS lookup.
+        if (remoteAddr == null || remoteAddr.indexOf(':') < 0) {
+            return remoteAddr;
+        }
+        try {
+            InetAddress address = InetAddress.getByName(remoteAddr);
+            if (!(address instanceof Inet6Address)) {
+                return address.getHostAddress();
+            }
+            byte[] network = Arrays.copyOf(address.getAddress(), 16);
+            Arrays.fill(network, IPV6_PREFIX_BYTES, network.length, (byte) 0);
+            return InetAddress.getByAddress(network).getHostAddress() + "/64";
+        } catch (UnknownHostException e) {
+            return remoteAddr;
+        }
     }
 
     private Bucket newBucket() {

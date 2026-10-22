@@ -56,6 +56,43 @@ class AuthRateLimitFilterTest {
     }
 
     @Test
+    void ipv6AddressesInSameSlash64ShareABucket() throws Exception {
+        AuthRateLimitFilter filter = new AuthRateLimitFilter(1, JsonMapper.builder().build(), nanos::get, 1_000);
+
+        assertThat(send(filter, "2001:db8:1:2::1")).isEqualTo(200);
+        assertThat(send(filter, "2001:db8:1:2:ffff:ffff:ffff:ffff")).isEqualTo(429);
+        assertThat(send(filter, "2001:0db8:0001:0002:0000:0000:0000:0042")).isEqualTo(429);
+        assertThat(filter.trackedIpCount()).isEqualTo(1);
+    }
+
+    @Test
+    void ipv6AddressesInDifferentSlash64sDoNotShare() throws Exception {
+        AuthRateLimitFilter filter = new AuthRateLimitFilter(1, JsonMapper.builder().build(), nanos::get, 1_000);
+
+        assertThat(send(filter, "2001:db8:1:2::1")).isEqualTo(200);
+        assertThat(send(filter, "2001:db8:1:3::1")).isEqualTo(200);
+        assertThat(filter.trackedIpCount()).isEqualTo(2);
+    }
+
+    @Test
+    void ipv4IsKeyedByFullAddressAndMappedIpv6CountsAsIpv4() throws Exception {
+        AuthRateLimitFilter filter = new AuthRateLimitFilter(1, JsonMapper.builder().build(), nanos::get, 1_000);
+
+        assertThat(send(filter, "10.0.0.1")).isEqualTo(200);
+        assertThat(send(filter, "10.0.0.2")).isEqualTo(200);
+        assertThat(send(filter, "::ffff:10.0.0.1")).isEqualTo(429);
+    }
+
+    @Test
+    void clientKeyNormalizesAddresses() {
+        assertThat(AuthRateLimitFilter.clientKey("203.0.113.7")).isEqualTo("203.0.113.7");
+        assertThat(AuthRateLimitFilter.clientKey("::ffff:203.0.113.7")).isEqualTo("203.0.113.7");
+        assertThat(AuthRateLimitFilter.clientKey("2001:db8:1:2:aaaa:bbbb:cccc:dddd")).isEqualTo("2001:db8:1:2:0:0:0:0/64");
+        assertThat(AuthRateLimitFilter.clientKey("0:0:0:0:0:0:0:1")).isEqualTo("0:0:0:0:0:0:0:0/64");
+        assertThat(AuthRateLimitFilter.clientKey("fe80::1%1")).isEqualTo("fe80:0:0:0:0:0:0:0/64");
+    }
+
+    @Test
     void otherPathsAreNotLimitedOrTracked() throws Exception {
         AuthRateLimitFilter filter = new AuthRateLimitFilter(1, JsonMapper.builder().build(), nanos::get, 1_000);
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/users/me");
