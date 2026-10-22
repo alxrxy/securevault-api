@@ -16,6 +16,8 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.SecureRandom;
+import java.util.Base64;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -27,15 +29,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * included). The container is started once per JVM and shared by every
  * test class, so the cached Spring context keeps pointing at a live DB.
  */
-@SpringBootTest(properties = {
-        "app.jwt.secret=" + IntegrationTestBase.JWT_SECRET,
-        "app.rate-limit.auth.requests-per-minute=" + IntegrationTestBase.AUTH_REQUESTS_PER_MINUTE
-})
+@SpringBootTest(properties = "app.rate-limit.auth.requests-per-minute=" + IntegrationTestBase.AUTH_REQUESTS_PER_MINUTE)
 @AutoConfigureMockMvc
 public abstract class IntegrationTestBase {
 
-    /** Test-only key; never used outside the test suite. */
-    public static final String JWT_SECRET = "xw5vShwqRtHJ6aPEuBt4iQHnGSPLXg88dGrmXzxXtIiy9gbPKFg6X1sh3HOoFRPA";
+    /**
+     * Fresh random HMAC key per test JVM (48 bytes, like the production
+     * recommendation), so no signing key is ever committed to the repo.
+     */
+    public static final String JWT_SECRET = randomBase64Key();
     protected static final String PASSWORD = "correct-horse-battery";
     protected static final int AUTH_REQUESTS_PER_MINUTE = 5;
 
@@ -59,6 +61,13 @@ public abstract class IntegrationTestBase {
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
         registry.add("app.storage.root", STORAGE_ROOT::toString);
+        registry.add("app.jwt.secret", () -> JWT_SECRET);
+    }
+
+    private static String randomBase64Key() {
+        byte[] key = new byte[48];
+        new SecureRandom().nextBytes(key);
+        return Base64.getEncoder().encodeToString(key);
     }
 
     @Autowired
