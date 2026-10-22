@@ -3,3 +3,8 @@
 *.pdf binary
 *.png binary
 *.jpg binary
+
+# .env files are sourced by shells (`set -a; . ./.env`). With CRLF, bash on
+# Linux/macOS/WSL reads every value with a trailing \r (broken password and
+# JWT secret), so always check this out with LF, even on Windows.
+.env.example text eol=lf
