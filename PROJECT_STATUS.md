@@ -1,26 +1,37 @@
 # SecureVault API — Project Status
 
-Last updated: 2026-10-22 — **MVP complete; resume-readiness pass done**
+Last updated: 2026-10-22 — **MVP complete; final housekeeping done**
 
 This file is the shared source of truth on project state for Alex,
 Claude, and ChatGPT. Update it after every milestone with real results —
 never with a claim that hasn't been verified by actually running the
 build/tests.
 
-## Verified vs. not verified
+## Final state
 
-`origin/main` is at `1131d32`. Everything after it was committed locally
-and has **not been pushed** (Alex pushes).
+Where each fact comes from:
+- **Verified locally (Claude)**: run on this machine during the session.
+- **Reported by Alex (GitHub)**: read by Alex from the GitHub Actions /
+  pull-request pages. Claude cannot see GitHub and did not confirm these.
+- **Unverified**: nobody has checked yet.
+
+| What | Source | Result |
+|---|---|---|
+| Build + full test suite | Verified locally (Claude) | Fresh `mvn -B -ntp verify` on `b7ff45d` (after both Dependabot merges): **95 tests, 0 failures, 0 errors, 0 skipped**, BUILD SUCCESS. Later commits change only docs |
+| Git state | Verified locally (Claude) | Local `main` fast-forwarded to `origin/main` = `b7ff45d`; the housekeeping commits on top are local and **not pushed** |
+| CI (`ci.yml`) and CodeQL (`codeql.yml`) on `main` | Reported by Alex (GitHub) | Green after the last push and after both Dependabot merges |
+| Dependabot config | Reported by Alex (GitHub) | Accepted the new `dependabot.yml`; opened **one** combined CodeQL group PR (#6, init + analyze 4.38.3 → 4.39.0) |
+| PR #6 (CodeQL group) | Reported by Alex (GitHub) | Passed CI, CodeQL and Dependency Review; merged |
+| PR #1 (setup-java 6.0.1 → 6.1.0) | Reported by Alex (GitHub); diff checked locally | Merged. The merged diff bumps both `ci.yml` and `codeql.yml` |
+| Java 24 / Java 26 Docker PRs (#3, #2) | Reported by Alex (GitHub) | Closed unmerged |
+| Secret scanning + push protection | Reported by Alex (GitHub) | Enabled in repo settings |
+| Mermaid diagrams render on GitHub | **Unverified** | The flowchart and the ER diagram in the README have not been checked on GitHub. Treat as unverified until Alex confirms |
+| Docker ignore rules in practice | **Unverified** | Whether `eclipse-temurin` still gets Java 21 patch/digest PRs only shows up on later Dependabot runs |
+
+### Earlier verification (unchanged since the resume-readiness pass)
 
 | What | Status | Evidence |
 |---|---|---|
-| Build + full test suite | ✅ Verified locally | `mvn -B -ntp verify` → **95/95**, BUILD SUCCESS on `5d70bf9`, clean tree. The commits after it only change docs and the demo script header |
-| GitHub CI (`ci.yml`) up to `1131d32` | ✅ Verified on GitHub | Push run on `1131d32`: success (GitHub Actions API) |
-| GitHub CI on the new local commits | ⏳ Not yet | Not pushed |
-| Dependency Review (`dependency-review.yml`) | ✅ Verified on GitHub | Success on Dependabot PR #1 |
-| CodeQL (`codeql.yml`) | ⏳ Never run | New and not pushed. The YAML parses, and the action SHA was resolved from the annotated `v4.38.3` tag to its commit |
-| Dependabot | ✅ Verified on GitHub (Maven + Actions) | Update jobs succeeded; opened PR #1 (setup-java 6.1.0). The new `docker` ecosystem entry hasn't run yet |
-| Secret scanning + push protection | ☑️ Reported by Alex | Enabled in repo settings by Alex; I can't see repo settings to confirm |
 | Docker image builds | ✅ Verified locally | `docker compose build` OK; image `securevault-api:local` is 415 MB |
 | Container runs hardened | ✅ Verified locally | Healthy; `id` → `uid=10001(app)`; `touch /app/x` → read-only file system; only `/data/storage` writable |
 | Container serves health + Swagger UI | ✅ Verified locally | `/actuator/health` 200 `UP`; `/swagger-ui.html` 302 → `index.html` 200; `/v3/api-docs` 6 paths + `bearerAuth` |
@@ -33,7 +44,6 @@ and has **not been pushed** (Alex pushes).
 | Fresh clone, README Option B (Maven, Git Bash) | ✅ Verified | Postgres via Compose, `set -a; . ./.env; set +a`, `mvn spring-boot:run` → `Started SecurevaultApplication` |
 | Fresh clone `.env` under standard bash (Linux/WSL) | ✅ Verified after fix | Was broken (CRLF → values ending in `\r`); fixed in `5d70bf9` and re-checked in a `bash:5.2` container on a new clone |
 | Full Option B on Linux/macOS | ⏳ Not run | Only the `.env` sourcing step was tested under Linux bash |
-| Mermaid diagrams render | ⏳ Not verified | No local renderer; GitHub renders them on push |
 | Screenshots | ✅ Taken by Alex | 8 images in `docs/screenshots/`, linked in the README; the captions match each image's content |
 | Swagger UI in an interactive browser | ✅ Shown by Alex's screenshots | Earlier I had only checked it headlessly |
 | `actionlint` on workflows | ⏳ Not run | Not installed. `ci.yml` and `dependency-review.yml` are proven by green runs |
@@ -42,7 +52,7 @@ Environment: Temurin JDK 21.0.12.1, Maven 3.10.0, Docker Desktop
 (Testcontainers + Compose, `postgres:16-alpine` → PostgreSQL 16.15),
 Windows 11, Windows PowerShell 5.1. CI runs on GitHub-hosted `ubuntu-latest`.
 
-### Latest local `mvn -B -ntp verify` (commit `5d70bf9`)
+### Latest local `mvn -B -ntp verify` (commit `b7ff45d`, 2026-10-22)
 
 ```
 Tests run: 2,  Failures: 0, Errors: 0, Skipped: 0 -- ApiDocsIntegrationTest
@@ -59,7 +69,12 @@ Tests run: 31, Failures: 0, Errors: 0, Skipped: 0 -- SecurityRegressionTest
 Tests run: 5,  Failures: 0, Errors: 0, Skipped: 0 -- LocalFilesystemStorageServiceTest
 Tests run: 95, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
+Total time:  48.751 s
 ```
+
+The build also prints two `WARNING`s: Maven can't fetch
+`/.meta/prefixes.txt` from two Flyway/Redgate repositories (HTTP 401).
+These are optional metadata lookups, and the build succeeds regardless.
 
 One `ERROR`-level log line appears during the run. It is expected: it
 comes from `serverErrorsDoNotLeakInternals`, which deliberately causes a
@@ -150,7 +165,7 @@ confirmed to fail, and the code was restored:
 | Secrets | No defaults for `JWT_SECRET` / `DB_PASSWORD`; fail-fast; test key generated at runtime |
 | Container | Multi-stage Dockerfile, non-root uid 10001, digest-pinned bases, healthcheck; Compose app service with read-only root fs, `cap_drop: ALL`, `no-new-privileges` |
 | API docs | springdoc-openapi 3.1.1; Swagger UI + `/v3/api-docs`; bearer auth documented |
-| CI/CD | `ci.yml` (`mvn verify`), `dependency-review.yml` (high/critical), `codeql.yml` (default suite), Dependabot (Maven, Actions, Docker); actions SHA-pinned; least-privilege permissions |
+| CI/CD | `ci.yml` (`mvn verify`), `dependency-review.yml` (high/critical), `codeql.yml` (default suite), Dependabot (Maven; Actions with CodeQL grouped; runtime image held on Java 21); actions SHA-pinned; least-privilege permissions |
 | Demos | `demo/demo.ps1` (17 checked steps), `demo/securevault.http` + `sample.pdf`, 8 screenshots |
 | Docs | README: setup (Docker and Maven), config, demo, API + error contract, screenshots, Mermaid flow + ER diagrams, security design, threat model, testing guide, CI/CD, tradeoffs, limitations, future improvements |
 
@@ -169,6 +184,13 @@ confirmed to fail, and the code was restored:
   weeks old, pinned by SHA/digest; Dependabot proposes newer ones
 - `audit_log` has no foreign keys; the quota counts `documents.size_bytes`
 - API docs are public (documented; can be switched off)
+- Docker images stay on Java 21 (LTS): Dependabot ignores
+  `eclipse-temurin` versions `>= 22`
+- The `maven` build image is bumped manually: its tag shows the JDK only
+  in a suffix that Dependabot ignore rules can't filter, so it is
+  excluded from Dependabot entirely (digest refreshes included)
+- All `github/codeql-action/*` updates arrive as one grouped Dependabot PR,
+  because every CodeQL step in a workflow must run the same version
 
 ## Known limitations
 
@@ -187,9 +209,11 @@ These are documented in the README, along with Future improvements.
 
 ## Next steps
 
-1. Push the local commits; confirm CI, **CodeQL** (first run), and
-   Dependency Review are green. Check that the Mermaid diagrams render.
-2. Decide on Dependabot PR #1 (setup-java 6.1.0).
+1. Push the housekeeping commits. Confirm that CI and CodeQL are green
+   and that both Mermaid diagrams render on GitHub, then record the result here.
+2. Bump the `maven` build image by hand from time to time. Alternatively,
+   move the build stage to an `eclipse-temurin:21-jdk` image plus a Maven
+   wrapper, so Dependabot can track it.
 3. Optional: run the demo on PowerShell 7, and try `securevault.http` in
    VS Code.
 4. Future improvements as listed in the README (next most useful:
