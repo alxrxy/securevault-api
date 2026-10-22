@@ -1,0 +1,5 @@
+# Never let line-ending conversion touch binary files (a PDF's xref offsets
+# break if LF becomes CRLF).
+*.pdf binary
+*.png binary
+*.jpg binary

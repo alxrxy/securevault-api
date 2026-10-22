@@ -1,0 +1,98 @@
+# SecureVault API - request collection for the VS Code "REST Client"
+# extension (humao.rest-client). Click "Send Request" above each block, top
+# to bottom. Responses from the login requests are captured by name.
+#
+# Change the emails before re-running: registering an existing email
+# returns 409 by design.
+
+@baseUrl = http://localhost:8080
+@password = demo-passphrase-123
+@alice = alice-http@example.com
+@bob = bob-http@example.com
+
+### Health (public)
+GET {{baseUrl}}/actuator/health
+
+### Register alice -> 201
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{"email": "{{alice}}", "password": "{{password}}"}
+
+### Register alice again -> 409 (duplicate email)
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{"email": "{{alice}}", "password": "{{password}}"}
+
+### Register bob -> 201
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{"email": "{{bob}}", "password": "{{password}}"}
+
+### Login alice -> 200
+# @name aliceLogin
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{"email": "{{alice}}", "password": "{{password}}"}
+
+### Login bob -> 200
+# @name bobLogin
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{"email": "{{bob}}", "password": "{{password}}"}
+
+### Who am I (alice)
+GET {{baseUrl}}/api/users/me
+Authorization: Bearer {{aliceLogin.response.body.accessToken}}
+
+### Upload sample.pdf as alice -> 201
+# @name upload
+POST {{baseUrl}}/api/documents
+Authorization: Bearer {{aliceLogin.response.body.accessToken}}
+Content-Type: multipart/form-data; boundary=SecureVaultBoundary
+
+--SecureVaultBoundary
+Content-Disposition: form-data; name="file"; filename="sample.pdf"
+Content-Type: application/pdf
+
+< ./sample.pdf
+--SecureVaultBoundary--
+
+### List alice's documents -> 200
+GET {{baseUrl}}/api/documents
+Authorization: Bearer {{aliceLogin.response.body.accessToken}}
+
+### Download -> 200, attachment + nosniff
+GET {{baseUrl}}/api/documents/{{upload.response.body.id}}/download
+Authorization: Bearer {{aliceLogin.response.body.accessToken}}
+
+### Bob requests alice's document -> 404 (same as a missing document)
+GET {{baseUrl}}/api/documents/{{upload.response.body.id}}
+Authorization: Bearer {{bobLogin.response.body.accessToken}}
+
+### Bob's list -> 200 []
+GET {{baseUrl}}/api/documents
+Authorization: Bearer {{bobLogin.response.body.accessToken}}
+
+### Text disguised as a PDF -> 415
+POST {{baseUrl}}/api/documents
+Authorization: Bearer {{aliceLogin.response.body.accessToken}}
+Content-Type: multipart/form-data; boundary=SecureVaultBoundary
+
+--SecureVaultBoundary
+Content-Disposition: form-data; name="file"; filename="invoice.pdf"
+Content-Type: application/pdf
+
+this is plain text, not a PDF
+--SecureVaultBoundary--
+
+### Delete -> 204
+DELETE {{baseUrl}}/api/documents/{{upload.response.body.id}}
+Authorization: Bearer {{aliceLogin.response.body.accessToken}}
+
+# 413 (25 MB + 1 byte), quota 409, and 429 need large files or many
+# requests - use demo.ps1 for those.
