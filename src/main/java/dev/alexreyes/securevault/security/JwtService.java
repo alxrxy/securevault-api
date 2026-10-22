@@ -3,7 +3,10 @@ package dev.alexreyes.securevault.security;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.UnsupportedJwtException;
+import io.jsonwebtoken.io.DecodingException;
 import io.jsonwebtoken.io.Decoders;
+import io.jsonwebtoken.security.MacAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -19,13 +22,14 @@ import java.util.UUID;
  *
  * <p>Security properties, explicitly:
  * <ul>
- *   <li><b>Signature:</b> HMAC-SHA256 via a secret key decoded from
+ *   <li><b>Signature:</b> HMAC-SHA256 (pinned explicitly - JJWT would
+ *       otherwise pick HS384/HS512 from the key length) via a secret key decoded from
  *       {@code app.jwt.secret} (must be base64, >= 32 bytes decoded -
  *       generate with {@code openssl rand -base64 48}).</li>
- *   <li><b>Algorithm confusion:</b> {@code verifyWith(SecretKey)} restricts
- *       the parser to HMAC algorithms compatible with this key - an
- *       attacker-supplied token claiming "alg: none" or an asymmetric
- *       algorithm is rejected before the signature is even checked.</li>
+ *   <li><b>Algorithm:</b> {@code verifyWith(SecretKey)} restricts the
+ *       parser to HMAC algorithms, so "alg: none" and asymmetric algorithms
+ *       are rejected before the signature is checked. On top of that the
+ *       header {@code alg} must be exactly HS256.</li>
  *   <li><b>Expiration:</b> enforced by the parser automatically from the
  *       {@code exp} claim; a small clock-skew allowance (30s) avoids
  *       false rejections from minor clock drift between processes.</li>
@@ -38,6 +42,7 @@ import java.util.UUID;
 public class JwtService {
 
     private static final String ISSUER = "securevault-api";
+    private static final MacAlgorithm ALGORITHM = Jwts.SIG.HS256;
 
     private final SecretKey key;
     private final Duration tokenTtl;
@@ -48,7 +53,7 @@ public class JwtService {
         byte[] keyBytes;
         try {
             keyBytes = Decoders.BASE64.decode(base64Secret);
-        } catch (IllegalArgumentException e) {
+        } catch (DecodingException e) {
             throw new IllegalStateException(
                     "app.jwt.secret must be valid base64. Generate one with: openssl rand -base64 48", e);
         }
@@ -68,7 +73,7 @@ public class JwtService {
                 .issuer(ISSUER)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plus(tokenTtl)))
-                .signWith(key)
+                .signWith(key, ALGORITHM)
                 .compact();
     }
 
@@ -77,11 +82,12 @@ public class JwtService {
     }
 
     /**
-     * Validates signature, issuer, and expiration, and returns the user id
+     * Validates signature, algorithm, issuer, and expiration, and returns the user id
      * from the subject claim.
      *
      * @throws io.jsonwebtoken.JwtException if the token is malformed, has an
-     *     invalid signature, is expired, or has the wrong issuer. Callers
+     *     invalid signature, a different algorithm, is expired, has the wrong
+     *     issuer, or has no subject. Callers
      *     treat every failure mode identically - "not authenticated" - and
      *     never surface which specific check failed to the client.
      */
@@ -92,6 +98,13 @@ public class JwtService {
                 .clockSkewSeconds(30)
                 .build()
                 .parseSignedClaims(token);
-        return UUID.fromString(parsed.getPayload().getSubject());
+        if (!ALGORITHM.getId().equals(parsed.getHeader().getAlgorithm())) {
+            throw new UnsupportedJwtException("Unexpected JWT algorithm");
+        }
+        String subject = parsed.getPayload().getSubject();
+        if (subject == null) {
+            throw new UnsupportedJwtException("JWT has no subject");
+        }
+        return UUID.fromString(subject);
     }
 }

@@ -27,7 +27,9 @@ management:
 
 app:
   jwt:
-    secret: ${JWT_SECRET:change-this-in-every-environment-to-a-long-random-value}
+    # No default on purpose: startup fails fast if JWT_SECRET is not set.
+    # Must be base64 decoding to >= 32 bytes (openssl rand -base64 48).
+    secret: ${JWT_SECRET}
     expiration-minutes: ${JWT_EXPIRATION_MINUTES:60}
 
 server:

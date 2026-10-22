@@ -11,7 +11,6 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
@@ -25,8 +24,11 @@ import java.util.UUID;
  * SecurityContext with an {@link AuthenticatedUser} principal. Runs once
  * per request, before the authorization rules in SecurityConfig decide
  * whether the request is allowed through.
+ *
+ * <p>Deliberately not a {@code @Component}: Spring Boot auto-registers
+ * Filter beans as servlet filters, which would run this outside the
+ * security filter chain as well. {@link SecurityConfig} creates it instead.
  */
-@Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String BEARER_PREFIX = "Bearer ";
