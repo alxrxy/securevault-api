@@ -2,8 +2,6 @@ package dev.alexreyes.securevault.security;
 
 import dev.alexreyes.securevault.IntegrationTestBase;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.io.Decoders;
-import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.Test;
 
 import javax.crypto.SecretKey;
@@ -22,8 +20,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 class JwtAuthenticationFilterTest extends IntegrationTestBase {
 
-    private static final SecretKey KEY = Keys.hmacShaKeyFor(Decoders.BASE64.decode(JWT_SECRET));
-    private static final String ISSUER = "securevault-api";
+    private static final SecretKey KEY = TestTokens.KEY;
+    private static final String ISSUER = TestTokens.ISSUER;
 
     @Test
     void validTokenIsAccepted() throws Exception {
@@ -132,20 +130,11 @@ class JwtAuthenticationFilterTest extends IntegrationTestBase {
     }
 
     private UUID registeredUserId() throws Exception {
-        String email = uniqueEmail();
-        register(email);
-        String token = loginForToken(email);
-        String subject = Jwts.parser().verifyWith(KEY).build().parseSignedClaims(token).getPayload().getSubject();
-        return UUID.fromString(subject);
+        return TestTokens.subjectOf(newUserToken());
     }
 
     private static io.jsonwebtoken.JwtBuilder validClaims(UUID userId) {
-        Instant now = Instant.now();
-        return Jwts.builder()
-                .subject(userId.toString())
-                .issuer(ISSUER)
-                .issuedAt(Date.from(now))
-                .expiration(Date.from(now.plus(1, ChronoUnit.HOURS)));
+        return TestTokens.validClaims(userId);
     }
 
     private void expectStatus(String token, int expected) throws Exception {

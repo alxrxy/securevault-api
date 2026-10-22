@@ -35,7 +35,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 public abstract class IntegrationTestBase {
 
     /** Test-only key; never used outside the test suite. */
-    protected static final String JWT_SECRET = "xw5vShwqRtHJ6aPEuBt4iQHnGSPLXg88dGrmXzxXtIiy9gbPKFg6X1sh3HOoFRPA";
+    public static final String JWT_SECRET = "xw5vShwqRtHJ6aPEuBt4iQHnGSPLXg88dGrmXzxXtIiy9gbPKFg6X1sh3HOoFRPA";
     protected static final String PASSWORD = "correct-horse-battery";
     protected static final int AUTH_REQUESTS_PER_MINUTE = 5;
 
