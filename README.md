@@ -4,9 +4,24 @@ A security-focused document management REST API. Users register, authenticate,
 and upload/view/download/delete their own documents, with enforced ownership
 and defense against broken object-level authorization (BOLA/IDOR).
 
-**Status:** registration, JWT login, per-IP auth rate limiting, and audit
-logging are implemented and covered by integration tests. Document
-endpoints are the next milestone. See `PROJECT_STATUS.md` for details.
+**Status:** registration, JWT login, per-IP auth rate limiting, audit
+logging, and owner-scoped document upload/list/get/download/delete are
+implemented, covered by integration tests, and smoke-tested by hand. See
+`PROJECT_STATUS.md` for details.
+
+## API
+
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| POST | `/api/auth/register` | public | `{email, password}` → 201 |
+| POST | `/api/auth/login` | public | → `{accessToken, tokenType, expiresIn}` |
+| GET | `/api/users/me` | bearer | |
+| POST | `/api/documents` | bearer | multipart field `file`; PDF/PNG/JPEG, ≤ 25 MB |
+| GET | `/api/documents` | bearer | your documents only |
+| GET | `/api/documents/{id}` | bearer | metadata |
+| GET | `/api/documents/{id}/download` | bearer | attachment |
+| DELETE | `/api/documents/{id}` | bearer | → 204 |
+| GET | `/actuator/health` | public | |
 
 ## Stack
 
@@ -46,6 +61,16 @@ curl http://localhost:8080/actuator/health
   `SecurityConfig` for the full reasoning.
 - **Protected by default.** Every endpoint requires authentication unless
   explicitly added to the public allow-list in `SecurityConfig`.
+- **Ownership enforced in every query.** Documents are always looked up by
+  `(id, owner_id)`; another user's document returns the same 404 as a
+  missing one, so ids can't be probed.
+- **Uploads are identified by content, not by what the client claims.**
+  Only PDF, PNG, and JPEG magic bytes are accepted; the stored type and
+  extension come from the bytes. Files are stored as
+  `{ownerId}/{documentId}.{ext}` (never a user-supplied name), and every
+  storage access verifies the symlink-resolved path stays inside the root.
+- **Downloads are always attachments** with the detected `Content-Type`
+  and `X-Content-Type-Options: nosniff`.
 - **Schema owned by Flyway, not Hibernate.** `ddl-auto: validate` means
   Hibernate checks entities against the schema at startup but never
   generates or alters tables itself.
@@ -71,9 +96,13 @@ mvn test    # requires Docker running (Testcontainers starts PostgreSQL)
 
 ## Known limitations (current milestone)
 
-- Document endpoints are not implemented yet.
 - No CI pipeline yet.
-- Rate limiting is in-memory (resets on restart, not shared across instances).
+- Rate limiting is in-memory (resets on restart, not shared across
+  instances) and keys on the full client address, so an IPv6 client
+  controlling a /64 can rotate addresses.
+- File type checks look at leading magic bytes only; downloads are
+  attachment + nosniff to contain polyglot files.
+- Local filesystem storage only; no document versioning.
 
 ## License
 
