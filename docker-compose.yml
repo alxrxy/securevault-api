@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: ${DB_NAME:-securevault}
       POSTGRES_USER: ${DB_USERNAME:-securevault}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set (copy .env.example to .env)}
     ports:
       - "${DB_PORT:-5432}:5432"
     volumes:

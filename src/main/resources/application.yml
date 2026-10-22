@@ -4,7 +4,8 @@ spring:
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:securevault}
     username: ${DB_USERNAME:securevault}
-    password: ${DB_PASSWORD:changeme}
+    # No default on purpose (like JWT_SECRET): startup fails fast if unset.
+    password: ${DB_PASSWORD}
   jpa:
     hibernate:
       # Flyway owns the schema. Hibernate only validates entities against it
