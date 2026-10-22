@@ -4,5 +4,6 @@ target/
 *.iml
 .vscode/
 .env
+data/
 *.log
 .DS_Store
