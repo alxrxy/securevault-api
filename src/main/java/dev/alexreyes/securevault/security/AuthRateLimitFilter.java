@@ -13,6 +13,9 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
+import org.springframework.security.web.util.matcher.OrRequestMatcher;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -23,7 +26,6 @@ import java.net.UnknownHostException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -52,7 +54,14 @@ import java.util.concurrent.TimeUnit;
  */
 public class AuthRateLimitFilter extends OncePerRequestFilter {
 
-    private static final Set<String> RATE_LIMITED_PATHS = Set.of("/api/auth/login", "/api/auth/register");
+    /**
+     * Matched the same way Spring Security and MVC match (on the decoded,
+     * normalized path). Comparing the raw request URI instead let
+     * {@code /api/auth/%6Cogin} reach the login handler unthrottled.
+     */
+    private static final RequestMatcher RATE_LIMITED = new OrRequestMatcher(
+            PathPatternRequestMatcher.pathPattern("/api/auth/login"),
+            PathPatternRequestMatcher.pathPattern("/api/auth/register"));
     private static final Duration REFILL_PERIOD = Duration.ofMinutes(1);
     private static final long MAX_TRACKED_IPS = 100_000;
     private static final int IPV6_PREFIX_BYTES = 8; // /64
@@ -90,8 +99,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        String path = request.getRequestURI().substring(request.getContextPath().length());
-        return !RATE_LIMITED_PATHS.contains(path);
+        return !RATE_LIMITED.matches(request);
     }
 
     @Override
