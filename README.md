@@ -71,7 +71,8 @@ mvn spring-boot:run                              # API on :8080
 
 Keep `.env` with LF line endings. Git checks out `.env.example` with LF
 on every platform, but an editor that saves CRLF will make bash read
-every value with a trailing `` (e.g. `password authentication failed`).
+every value with a trailing `
+` (e.g. `password authentication failed`).
 
 PowerShell equivalent of the export step:
 `Get-Content .env | Where-Object { $_ -match '^\w+=' } | ForEach-Object { $k, $v = $_ -split '=', 2; Set-Item "env:$k" $v }`
@@ -101,8 +102,9 @@ instance and checks every status code. It covers register, login,
 upload, list, download (attachment + `nosniff` + byte-for-byte check),
 another user getting 404s, a duplicate email (409), a disguised HTML
 file (415), a 25 MB + 1 byte upload (413), filling the storage quota
-(409), and brute-forcing a password (429). It works on Windows
-PowerShell 5.1 and PowerShell 7+ (`pwsh` on macOS and Linux).
+(409), and brute-forcing a password (429). It's tested on Windows
+PowerShell 5.1. It uses only .NET `HttpClient`, so PowerShell 7+ (`pwsh`,
+including macOS and Linux) should also work, but that hasn't been tested.
 
 ```powershell
 # Start the API with a small quota so the quota step can trigger, e.g. in .env:

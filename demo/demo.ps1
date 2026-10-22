@@ -8,8 +8,9 @@
     409, storage-quota 409, oversized 413, wrong-type 415, and rate-limit 429.
     Exits 0 if every step behaves as expected, 1 otherwise.
 
-    Works on Windows PowerShell 5.1 and PowerShell 7+ (uses .NET HttpClient
-    directly, so 4xx responses are data rather than exceptions).
+    Tested on Windows PowerShell 5.1. Uses .NET HttpClient directly (so 4xx
+    responses are data rather than exceptions), which PowerShell 7+ also
+    provides, but 7+ has not been tested.
 
     Prerequisites:
       * The API is running (see README "Getting started").
