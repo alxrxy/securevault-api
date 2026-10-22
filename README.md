@@ -56,6 +56,19 @@ curl http://localhost:8080/actuator/health
 mvn test    # requires Docker running (Testcontainers starts PostgreSQL)
 ```
 
+## Known tradeoffs
+
+- **Registration reveals whether an email is registered.** `POST
+  /api/auth/register` returns `409 Conflict` for an existing email, so
+  anyone can probe which addresses have accounts. Login does *not* leak
+  this (unknown email and wrong password give the same 401, with matching
+  timing). This is accepted for the MVP because the alternative - always
+  returning the same response and notifying the address owner out of band
+  - needs an email-delivery flow that is out of scope. Mitigations in
+  place: the per-IP rate limit on `/api/auth/register` slows bulk probing,
+  and every duplicate attempt is recorded in `audit_log`
+  (`REGISTER`/`FAILURE`).
+
 ## Known limitations (current milestone)
 
 - Document endpoints are not implemented yet.
