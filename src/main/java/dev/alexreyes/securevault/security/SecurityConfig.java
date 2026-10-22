@@ -40,6 +40,12 @@ public class SecurityConfig {
             "/actuator/health/**",
             "/api/auth/register",
             "/api/auth/login",
+            // API documentation (springdoc). Describes the API only - every
+            // operation it lists is still protected as configured here.
+            "/v3/api-docs",
+            "/v3/api-docs/**",
+            "/swagger-ui.html",
+            "/swagger-ui/**",
             // Servlet error dispatches; without this a failed public request
             // would be re-reported as 401 by the error page itself.
             "/error"
