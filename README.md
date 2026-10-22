@@ -1,5 +1,7 @@
 # SecureVault API
 
+[![CI](https://github.com/alxrxy/securevault-api/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/alxrxy/securevault-api/actions/workflows/ci.yml)
+
 A security-focused document management REST API. Users register, log in
 with a JWT, and upload, list, view, download, and delete **their own**
 documents. The project is built around defending the usual weak spots of
