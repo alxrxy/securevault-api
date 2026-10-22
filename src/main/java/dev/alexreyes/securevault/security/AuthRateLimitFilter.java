@@ -2,6 +2,7 @@ package dev.alexreyes.securevault.security;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.Ticker;
 import dev.alexreyes.securevault.exception.ApiError;
 import io.github.bucket4j.Bucket;
 import io.github.bucket4j.ConsumptionProbe;
@@ -50,17 +51,33 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
 
     private final long requestsPerMinute;
     private final JsonMapper jsonMapper;
-    private final Cache<String, Bucket> buckets = Caffeine.newBuilder()
-            .maximumSize(MAX_TRACKED_IPS)
-            .expireAfterAccess(REFILL_PERIOD)
-            .build();
+    private final Cache<String, Bucket> buckets;
 
     public AuthRateLimitFilter(long requestsPerMinute, JsonMapper jsonMapper) {
+        this(requestsPerMinute, jsonMapper, Ticker.systemTicker(), MAX_TRACKED_IPS);
+    }
+
+    /** Visible for tests: a controllable clock and size bound for the bucket cache. */
+    AuthRateLimitFilter(long requestsPerMinute, JsonMapper jsonMapper, Ticker ticker, long maxTrackedIps) {
         if (requestsPerMinute < 1) {
             throw new IllegalArgumentException("requestsPerMinute must be at least 1");
         }
         this.requestsPerMinute = requestsPerMinute;
         this.jsonMapper = jsonMapper;
+        this.buckets = Caffeine.newBuilder()
+                .maximumSize(maxTrackedIps)
+                .expireAfterAccess(REFILL_PERIOD)
+                .ticker(ticker)
+                // Run eviction on the calling thread instead of the common
+                // ForkJoinPool; it's cheap and keeps eviction deterministic.
+                .executor(Runnable::run)
+                .build();
+    }
+
+    /** Visible for tests: number of IPs currently holding a bucket. */
+    long trackedIpCount() {
+        buckets.cleanUp();
+        return buckets.estimatedSize();
     }
 
     @Override
