@@ -2,7 +2,7 @@
 
 # ---- Build stage: compile and package the Spring Boot jar ----------------
 # Base images are pinned by digest; Dependabot (docker ecosystem) bumps them.
-FROM maven:3.10.0-eclipse-temurin-21-noble@sha256:1bc7bb8342cb0cad1727af35ab5a36ce0abf13ec4e1393a001c5f0a559fcc1c7 AS build
+FROM maven:3-eclipse-temurin-26-noble@sha256:69a6c37f0a91fca2c9d0cdd684c9c0ea7b1bc00d4196749c24440b2e02ad163d AS build
 WORKDIR /build
 
 # Resolve dependencies in their own layer so source edits don't re-download them.
