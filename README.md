@@ -71,8 +71,7 @@ mvn spring-boot:run                              # API on :8080
 
 Keep `.env` with LF line endings. Git checks out `.env.example` with LF
 on every platform, but an editor that saves CRLF will make bash read
-every value with a trailing `
-` (e.g. `password authentication failed`).
+every value with a trailing `\r` (e.g. `password authentication failed`).
 
 PowerShell equivalent of the export step:
 `Get-Content .env | Where-Object { $_ -match '^\w+=' } | ForEach-Object { $k, $v = $_ -split '=', 2; Set-Item "env:$k" $v }`
