@@ -13,6 +13,8 @@ Where each fact comes from:
 - **Verified locally (Claude)**: run on this machine during the session.
 - **Reported by Alex (GitHub)**: read by Alex from the GitHub Actions /
   pull-request pages. Claude cannot see GitHub and did not confirm these.
+- **Verified by Alex**: checked by Alex personally, on GitHub or on Alex's
+  own machine. Claude did not observe these checks.
 - **Unverified**: nobody has checked yet.
 
 | What | Source | Result |
@@ -25,7 +27,8 @@ Where each fact comes from:
 | PR #1 (setup-java 6.0.1 → 6.1.0) | Reported by Alex (GitHub); diff checked locally | Merged. The merged diff bumps both `ci.yml` and `codeql.yml` |
 | Java 24 / Java 26 Docker PRs (#3, #2) | Reported by Alex (GitHub) | Closed unmerged |
 | Secret scanning + push protection | Reported by Alex (GitHub) | Enabled in repo settings |
-| Mermaid diagrams render on GitHub | **Unverified** | The flowchart and the ER diagram in the README have not been checked on GitHub. Treat as unverified until Alex confirms |
+| Mermaid diagrams render on GitHub | Verified by Alex (GitHub) | Both README diagrams (request flow and data model) render correctly on the repo front page |
+| End-to-end demo (`demo/demo.ps1`) | Verified by Alex (local) | Alex ran it against the Docker stack with a 1MB quota: **17/17 PASS**. An earlier FAIL on the quota step was caused by a stale `STORAGE_QUOTA_PER_USER` variable in Alex's PowerShell session. A shell variable overrides `.env` in Compose interpolation, so the app got the wrong quota. Not an app or Compose bug |
 | Docker ignore rules in practice | **Unverified** | Whether `eclipse-temurin` still gets Java 21 patch/digest PRs only shows up on later Dependabot runs |
 
 ### Earlier verification (unchanged since the resume-readiness pass)
@@ -209,8 +212,7 @@ These are documented in the README, along with Future improvements.
 
 ## Next steps
 
-1. Push the housekeeping commits. Confirm that CI and CodeQL are green
-   and that both Mermaid diagrams render on GitHub, then record the result here.
+1. Push the housekeeping commits and confirm that CI and CodeQL are green.
 2. Bump the `maven` build image by hand from time to time. Alternatively,
    move the build stage to an `eclipse-temurin:21-jdk` image plus a Maven
    wrapper, so Dependabot can track it.
