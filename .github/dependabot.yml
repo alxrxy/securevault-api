@@ -19,3 +19,12 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    groups:
+      # Every github/codeql-action/* step (init, analyze, ...) must run the
+      # same version, or CodeQL fails with "All steps in a workflow that use
+      # github/codeql-action must use the same version". Separate PRs for
+      # init and analyze broke that, so they are always updated together.
+      # No update-types filter: majors must move together too.
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
