@@ -9,9 +9,11 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -21,13 +23,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * included). The container is started once per JVM and shared by every
  * test class, so the cached Spring context keeps pointing at a live DB.
  */
-@SpringBootTest(properties = "app.jwt.secret=" + IntegrationTestBase.JWT_SECRET)
+@SpringBootTest(properties = {
+        "app.jwt.secret=" + IntegrationTestBase.JWT_SECRET,
+        "app.rate-limit.auth.requests-per-minute=" + IntegrationTestBase.AUTH_REQUESTS_PER_MINUTE
+})
 @AutoConfigureMockMvc
 public abstract class IntegrationTestBase {
 
     /** Test-only key; never used outside the test suite. */
     protected static final String JWT_SECRET = "xw5vShwqRtHJ6aPEuBt4iQHnGSPLXg88dGrmXzxXtIiy9gbPKFg6X1sh3HOoFRPA";
     protected static final String PASSWORD = "correct-horse-battery";
+    protected static final int AUTH_REQUESTS_PER_MINUTE = 5;
 
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
@@ -49,8 +55,25 @@ public abstract class IntegrationTestBase {
         return "user-" + UUID.randomUUID() + "@example.com";
     }
 
+    protected static String randomIp() {
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+        return "10." + random.nextInt(256) + "." + random.nextInt(256) + "." + random.nextInt(1, 255);
+    }
+
+    protected static RequestPostProcessor fromIp(String ip) {
+        return request -> {
+            request.setRemoteAddr(ip);
+            return request;
+        };
+    }
+
+    /**
+     * Each call comes from a random client IP so tests don't share (and
+     * exhaust) one auth rate-limit bucket. Chain {@code .with(fromIp(..))}
+     * to pin a specific IP.
+     */
     protected static MockHttpServletRequestBuilder postJson(String url, String json) {
-        return post(url).contentType(MediaType.APPLICATION_JSON).content(json);
+        return post(url).contentType(MediaType.APPLICATION_JSON).content(json).with(fromIp(randomIp()));
     }
 
     protected static String credentialsJson(String email, String password) {

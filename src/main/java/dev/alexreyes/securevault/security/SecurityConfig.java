@@ -1,6 +1,7 @@
 package dev.alexreyes.securevault.security;
 
 import dev.alexreyes.securevault.user.repository.AppUserRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -13,6 +14,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Baseline security configuration.
@@ -48,7 +50,9 @@ public class SecurityConfig {
             HttpSecurity http,
             JwtService jwtService,
             AppUserRepository userRepository,
-            RestAuthenticationEntryPoint authenticationEntryPoint) throws Exception {
+            RestAuthenticationEntryPoint authenticationEntryPoint,
+            JsonMapper jsonMapper,
+            @Value("${app.rate-limit.auth.requests-per-minute}") long authRequestsPerMinute) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -58,7 +62,9 @@ public class SecurityConfig {
                 )
                 .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(authenticationEntryPoint))
                 .addFilterBefore(new JwtAuthenticationFilter(jwtService, userRepository),
-                        UsernamePasswordAuthenticationFilter.class);
+                        UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(new AuthRateLimitFilter(authRequestsPerMinute, jsonMapper),
+                        JwtAuthenticationFilter.class);
         return http.build();
     }
 
