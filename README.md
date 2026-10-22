@@ -4,9 +4,9 @@ A security-focused document management REST API. Users register, authenticate,
 and upload/view/download/delete their own documents, with enforced ownership
 and defense against broken object-level authorization (BOLA/IDOR).
 
-**Status:** early skeleton — health endpoint and baseline security are in
-place; registration, authentication, and document endpoints are the next
-milestones. See the task list / commit history for current progress.
+**Status:** registration, JWT login, per-IP auth rate limiting, and audit
+logging are implemented and covered by integration tests. Document
+endpoints are the next milestone. See `PROJECT_STATUS.md` for details.
 
 ## Stack
 
@@ -26,6 +26,10 @@ cp .env.example .env
 # edit .env - at minimum set a real JWT_SECRET (openssl rand -base64 48)
 
 docker compose --env-file .env up -d      # starts Postgres
+
+# Maven does not read .env - export the variables first (JWT_SECRET has no
+# default and the app refuses to start without it)
+set -a; . ./.env; set +a
 mvn spring-boot:run                        # starts the app on :8080
 
 curl http://localhost:8080/actuator/health
@@ -46,15 +50,17 @@ curl http://localhost:8080/actuator/health
   Hibernate checks entities against the schema at startup but never
   generates or alters tables itself.
 
+## Running tests
+
+```bash
+mvn test    # requires Docker running (Testcontainers starts PostgreSQL)
+```
+
 ## Known limitations (current milestone)
 
-- Registration, login, and document endpoints are not implemented yet.
-- No automated tests yet.
+- Document endpoints are not implemented yet.
 - No CI pipeline yet.
-- This project has been written against Spring Boot 4.1.1's current
-  documentation but has not yet been compiled/run in the environment that
-  wrote it (no Maven Central access there) - treat it as unverified until
-  you run the steps above and confirm it builds and starts.
+- Rate limiting is in-memory (resets on restart, not shared across instances).
 
 ## License
 
