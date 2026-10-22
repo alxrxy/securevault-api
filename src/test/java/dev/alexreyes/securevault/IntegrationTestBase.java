@@ -12,6 +12,10 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -37,8 +41,16 @@ public abstract class IntegrationTestBase {
 
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
+    /** Uploaded files land here during tests, never in the project's ./data. */
+    protected static final Path STORAGE_ROOT;
+
     static {
         POSTGRES.start();
+        try {
+            STORAGE_ROOT = Files.createTempDirectory("securevault-test-storage").toRealPath();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     @DynamicPropertySource
@@ -46,6 +58,7 @@ public abstract class IntegrationTestBase {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
+        registry.add("app.storage.root", STORAGE_ROOT::toString);
     }
 
     @Autowired
@@ -90,5 +103,16 @@ public abstract class IntegrationTestBase {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         return JsonPath.read(body, "$.accessToken");
+    }
+
+    /** Registers a fresh user and returns a valid bearer token for them. */
+    protected String newUserToken() throws Exception {
+        String email = uniqueEmail();
+        register(email);
+        return loginForToken(email);
+    }
+
+    protected static String bearer(String token) {
+        return "Bearer " + token;
     }
 }
