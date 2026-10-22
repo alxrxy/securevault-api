@@ -14,6 +14,23 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # The project targets Java 21 (LTS); neither Dockerfile image may change
+    # its Java major version through Dependabot.
+    ignore:
+      # Runtime image. Tags look like 21.0.12.1_1-jre-alpine: the Java major
+      # is the leading version number, so ">= 22" blocks Java 22+ (e.g. the
+      # proposed 24.0.2_12-jre-alpine) while Java 21 patch tags and digest
+      # refreshes of the pinned tag still arrive.
+      - dependency-name: "eclipse-temurin"
+        versions: [">= 22"]
+      # Build image. Tags look like 3.10.0-eclipse-temurin-21-noble: the
+      # version is Maven's, and the JDK major only appears in the tag suffix,
+      # which ignore rules cannot constrain. Dependabot proposed
+      # 3-eclipse-temurin-26-noble (JDK 26 and a floating tag), so ALL its
+      # updates for this image are ignored, digest refreshes included.
+      # Bump it by hand (keep an exact Maven version, JDK 21, and a digest).
+      # It is build-only; the shipped container uses the runtime image.
+      - dependency-name: "maven"
 
   - package-ecosystem: github-actions
     directory: /
