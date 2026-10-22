@@ -46,6 +46,8 @@ app:
     # Uploaded files live here as {ownerId}/{documentId}.{ext}. Must not be
     # inside any web-served directory.
     root: ${STORAGE_ROOT:./data/storage}
+    # Total bytes of documents a single user may store (e.g. 500MB, 5GB).
+    user-quota: ${STORAGE_QUOTA_PER_USER:1GB}
 
 server:
   port: ${SERVER_PORT:8080}

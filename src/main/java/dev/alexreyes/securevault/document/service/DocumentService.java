@@ -11,14 +11,18 @@ import dev.alexreyes.securevault.exception.DocumentNotFoundException;
 import dev.alexreyes.securevault.exception.FileRejectedException;
 import dev.alexreyes.securevault.storage.StorageException;
 import dev.alexreyes.securevault.storage.StorageService;
+import dev.alexreyes.securevault.user.repository.AppUserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.unit.DataSize;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -42,16 +46,25 @@ public class DocumentService {
     private final StorageService storageService;
     private final AuditService auditService;
     private final DataSize maxFileSize;
+    private final DataSize userQuota;
+    private final AppUserRepository userRepository;
+    private final TransactionTemplate transactionTemplate;
 
     public DocumentService(
             DocumentRepository documentRepository,
             StorageService storageService,
             AuditService auditService,
-            @Value("${spring.servlet.multipart.max-file-size}") DataSize maxFileSize) {
+            AppUserRepository userRepository,
+            PlatformTransactionManager transactionManager,
+            @Value("${spring.servlet.multipart.max-file-size}") DataSize maxFileSize,
+            @Value("${app.storage.user-quota}") DataSize userQuota) {
         this.documentRepository = documentRepository;
         this.storageService = storageService;
         this.auditService = auditService;
+        this.userRepository = userRepository;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.maxFileSize = maxFileSize;
+        this.userQuota = userQuota;
     }
 
     public record DocumentDownload(Document document, Resource content) {
@@ -61,6 +74,9 @@ public class DocumentService {
         AllowedFileType type;
         try {
             type = validate(file);
+            // Cheap unlocked pre-check so obviously over-quota uploads never
+            // touch the disk; the locked check below is authoritative.
+            requireWithinQuota(ownerId, file.getSize());
         } catch (FileRejectedException e) {
             auditService.record(AuditAction.DOCUMENT_UPLOAD, AuditOutcome.FAILURE, ownerId,
                     DOCUMENT_RESOURCE, null, clientIp);
@@ -76,12 +92,24 @@ public class DocumentService {
             throw new StorageException("Failed to read upload", e);
         }
 
-        Document document = new Document(documentId, ownerId, displayFilename(file.getOriginalFilename(), type),
+        Document newDocument = new Document(documentId, ownerId, displayFilename(file.getOriginalFilename(), type),
                 storageKey, type.mediaType(), file.getSize());
+        Document document;
         try {
-            document = documentRepository.save(document);
+            document = transactionTemplate.execute(status -> {
+                // Lock the owner's row so concurrent uploads by the same user
+                // run the quota check + insert one at a time.
+                userRepository.findByIdForUpdate(ownerId)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
+                requireWithinQuota(ownerId, newDocument.getSizeBytes());
+                return documentRepository.save(newDocument);
+            });
         } catch (RuntimeException e) {
             deleteQuietly(storageKey);
+            if (e instanceof FileRejectedException) {
+                auditService.record(AuditAction.DOCUMENT_UPLOAD, AuditOutcome.FAILURE, ownerId,
+                        DOCUMENT_RESOURCE, null, clientIp);
+            }
             throw e;
         }
 
@@ -146,6 +174,15 @@ public class DocumentService {
         return AllowedFileType.detect(leadingBytes)
                 .orElseThrow(() -> new FileRejectedException(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
                         "Only PDF, PNG, and JPEG files are allowed"));
+    }
+
+    private void requireWithinQuota(UUID ownerId, long additionalBytes) {
+        long used = documentRepository.totalSizeByOwnerId(ownerId);
+        if (used + additionalBytes > userQuota.toBytes()) {
+            throw new FileRejectedException(HttpStatus.CONFLICT,
+                    "Upload would exceed your storage quota (" + used + " of " + userQuota.toBytes()
+                            + " bytes used, this file is " + additionalBytes + " bytes)");
+        }
     }
 
     /**
