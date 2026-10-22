@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: securevault-postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME:-securevault}
+      POSTGRES_USER: ${DB_USERNAME:-securevault}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - securevault-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-securevault}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  securevault-pgdata:
