@@ -331,6 +331,8 @@ filenames, content types, ids, `X-Forwarded-For`) is trusted.
 | Resource exhaustion (huge uploads, filling the disk, rate-limiter memory) | 25 MB per file (servlet + service); per-user quota enforced under a row lock; bucket cache bounded and expiring | `StorageQuotaIntegrationTest` (fails without the lock), plus the demo's 413 step |
 | Running with default or missing secrets | No fallbacks for `JWT_SECRET` / `DB_PASSWORD`; fail fast before any bean starts | `RequiredSecretsInitializerTest` |
 | Container breakout / privilege abuse | Non-root uid, read-only root fs, `cap_drop: ALL`, `no-new-privileges` | Checked manually (`docker exec … id`, write attempt on `/app`) |
+| Insecure code patterns (injection, unsafe deserialization, path handling, ...) | CodeQL default security suite on every push/PR and weekly | CI (Security → Code scanning) |
+| Committed credentials | GitHub secret scanning + push protection; no secret defaults; test key generated at runtime | Repository settings |
 | Vulnerable dependencies | Dependabot; Dependency Review blocks high/critical on PRs | CI |
 
 ## Testing
@@ -376,8 +378,10 @@ a 1 KB quota.
 | Workflow / config | Runs on | What it does |
 |---|---|---|
 | [`ci.yml`](.github/workflows/ci.yml) | push and PR to `main` | `mvn -B -ntp verify` on JDK 21 Temurin with a Maven cache: compile, all tests (Testcontainers uses the runner's Docker), package |
+| [`codeql.yml`](.github/workflows/codeql.yml) | push and PR to `main`, weekly | CodeQL static analysis of the Java code (default high-precision security query suite, deliberately not `security-extended`, to avoid false-positive noise); results appear under **Security → Code scanning** |
 | [`dependency-review.yml`](.github/workflows/dependency-review.yml) | PRs to `main` | Fails the PR if it adds a dependency with a known **high or critical** vulnerability |
 | [`dependabot.yml`](.github/dependabot.yml) | weekly | Update PRs for Maven (minor/patch grouped into one PR), GitHub Actions, and the Dockerfile base images |
+| Secret scanning + push protection | every push | Enabled in the repository settings; pushes containing recognized credentials are blocked |
 
 Supply-chain hardening:
 - **Actions are pinned to full commit SHAs** (with the version in a
@@ -385,7 +389,8 @@ Supply-chain hardening:
   SHA can't. Dependabot keeps the SHAs current.
 - **Docker base images are pinned by digest** for the same reason.
 - Workflows run with `permissions: contents: read`, and checkout uses
-  `persist-credentials: false`.
+  `persist-credentials: false`. Only the CodeQL job gets
+  `security-events: write`, which it needs to upload results.
 
 ## Known tradeoffs
 

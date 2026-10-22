@@ -1,0 +1,49 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, so newly published CodeQL queries run even without code changes.
+    - cron: '27 4 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (java-kotlin)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+      security-events: write # upload results to the Security > Code scanning tab
+    steps:
+      # Actions are pinned to full commit SHAs (Dependabot keeps them updated).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      # No `queries:` override: the default suite is GitHub's high-precision
+      # security queries. security-extended / quality suites add noise.
+      - uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          languages: java-kotlin
+          build-mode: manual
+
+      # CodeQL observes this compile to extract the Java code.
+      - name: Build
+        run: mvn -B -ntp -DskipTests compile
+
+      - uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          category: /language:java-kotlin
