@@ -16,5 +16,37 @@ services:
       timeout: 5s
       retries: 5
 
+  # The API itself. `docker compose --env-file .env up -d --build` runs the
+  # whole stack; for local development run only `postgres` and use mvn.
+  app:
+    build: .
+    image: securevault-api:local
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-securevault}
+      DB_USERNAME: ${DB_USERNAME:-securevault}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set (copy .env.example to .env)}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set (openssl rand -base64 48)}
+      JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-60}
+      AUTH_RATE_LIMIT_PER_MINUTE: ${AUTH_RATE_LIMIT_PER_MINUTE:-10}
+      STORAGE_QUOTA_PER_USER: ${STORAGE_QUOTA_PER_USER:-1GB}
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    volumes:
+      - securevault-storage:/data/storage
+    # Hardening: immutable root filesystem (Tomcat/multipart temp files go
+    # to the /tmp tmpfs), no Linux capabilities, no privilege escalation.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+
 volumes:
   securevault-pgdata:
+  securevault-storage:
