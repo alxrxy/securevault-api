@@ -16,7 +16,7 @@ RUN mvn -B -ntp -DskipTests package \
  && java -Djarmode=tools -jar target/securevault-*.jar extract --layers --launcher --destination /extracted
 
 # ---- Runtime stage: JRE only, non-root ------------------------------------
-FROM eclipse-temurin:21.0.12.1_1-jre-alpine@sha256:b48e02e0ea88d7bfb305335df94923bdef394905f4147dccd52e873cf17b1088
+FROM eclipse-temurin:21.0.13.1_2-jre-alpine@sha256:5d7689f47d670aca766b9503a70bccc2d73b4eb9221ae8f714ae958313c4ce70
 
 RUN addgroup -S -g 10001 app \
  && adduser -S -D -H -u 10001 -G app app \
